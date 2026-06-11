@@ -1,0 +1,164 @@
+{
+  "name": "seen-it",
+  "displayName": "Seen It — File Review Tracker",
+  "description": "Track file changes and require review before proceeding.",
+  "version": "0.2.0",
+  "publisher": "Lazy-Xi",
+  "icon": "media/package-icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lazy-Xi/seen-it.git"
+  },
+  "engines": {
+    "vscode": "^1.120.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Seen It",
+      "properties": {
+        "seenIt.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional glob patterns to exclude from review tracking (added to built-in defaults). User-level and project-level patterns are merged (union). Built-in defaults: .git, node_modules, .vscode, dist, build, .next, __pycache__, *.pyc."
+        },
+        "seenIt.include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns to include despite being excluded. Overrides both built-in and user exclude patterns. Project-level settings take precedence over user-level."
+        },
+        "seenIt.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Seen It status bar item in the bottom panel."
+        },
+        "seenIt.statusBarAlignment": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "default": "left",
+          "description": "Alignment of the Seen It status bar item."
+        },
+        "seenIt.statusBarPriority": {
+          "type": "number",
+          "default": 100,
+          "description": "Priority (position) of the status bar item. Higher values place it further left (or further right if aligned right)."
+        },
+        "seenIt.debounceMs": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Debounce delay in milliseconds before refreshing the review tree after a state change."
+        },
+        "seenIt.confirmApproveAll": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a confirmation dialog before executing the 'Approve All' command."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "seenItReview",
+          "title": "Seen It — File Review",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "seenItReview": [
+        {
+          "id": "seenItUnreviewed",
+          "name": "To Review",
+          "when": "workspaceFolderCount > 0",
+          "icon": "$(circle-large-outline)"
+        },
+        {
+          "id": "seenItReviewed",
+          "name": "Reviewed",
+          "when": "workspaceFolderCount > 0",
+          "icon": "$(check-all)"
+        },
+        {
+          "type": "webview",
+          "id": "seenItActions",
+          "name": "Actions",
+          "icon": "$(tools)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "seenIt.markReviewed",
+        "title": "Mark as Reviewed",
+        "icon": "$(circle-large-outline)"
+      },
+      {
+        "command": "seenIt.markUnreviewed",
+        "title": "Mark as Unreviewed",
+        "icon": "$(pass-filled)"
+      },
+      {
+        "command": "seenIt.markAllReviewed",
+        "title": "Mark All as Reviewed"
+      },
+      {
+        "command": "seenIt.approveAll",
+        "title": "Approve All"
+      },
+      {
+        "command": "seenIt.approveReviewed",
+        "title": "Approve Reviewed"
+      },
+      {
+        "command": "seenIt.openFile",
+        "title": "Open File",
+        "icon": "$(file)"
+      },
+      {
+        "command": "seenIt.refresh",
+        "title": "Refresh"
+      },
+      {
+        "command": "seenIt.showOutput",
+        "title": "Seen It: Show Output Log"
+      },
+      {
+        "command": "seenIt.diagnostic",
+        "title": "Seen It: Run Diagnostic"
+      }
+    ],
+    "menus": {}
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "lint": "tsc --noEmit",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.42",
+    "@types/vscode": "^1.120.0",
+    "@vscode/vsce": "^2.32.0",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
