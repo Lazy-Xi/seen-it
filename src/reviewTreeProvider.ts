@@ -59,6 +59,8 @@ export class ReviewTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     const rules = getFilterRules();
     const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
     const filtered = allFiles.filter(f => {
+      // Hide approved files from both views
+      if (f.approved) { return false; }
       // Filter by review state
       if (this.filter === 'unreviewed' ? f.reviewed : !f.reviewed) {
         return false;

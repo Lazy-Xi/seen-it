@@ -1,4 +1,4 @@
-# Seen It — File Review Tracker
+# Seen It - File Review Tracker
 
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/Lazy-Xi.seen-it.png?style=flat-square&color=blue&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=Lazy-Xi.seen-it)
 [![Installs](https://vsmarketplacebadges.dev/installs-short/Lazy-Xi.seen-it.png?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=Lazy-Xi.seen-it)

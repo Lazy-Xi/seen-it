@@ -20,7 +20,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(outputChannel);
 
   const log = (msg: string) => {
-    console.log(`[Seen It] ${msg}`);
     outputChannel.appendLine(`[${new Date().toLocaleTimeString()}] ${msg}`);
   };
 
@@ -50,13 +49,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
 
   // Show VS Code native loading animation while FileIndex scans
-  vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Seen It — Scanning workspace files…' },
-    () => fileIndex.init(context)
-  ).then(() => {
-    unreviewedProvider.refresh();
-    reviewedProvider.refresh();
-  });
+  vscode.window
+    .withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'Seen It — Scanning workspace files…' },
+      () => fileIndex.init(context)
+    )
+    .then(() => {
+      unreviewedProvider.refresh();
+      reviewedProvider.refresh();
+    });
 
   const collectFileUris = (node: TreeNode): vscode.Uri[] => {
     if (node.kind === 'file') {
@@ -70,8 +71,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const node = item as TreeNode;
       const uris = collectFileUris(node);
       for (const uri of uris) {
+        const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
         if (newState === vscode.TreeItemCheckboxState.Checked) {
-          tracker.markReviewed(uri);
+          tracker.markReviewed(uri, doc?.getText());
         } else {
           tracker.markUnreviewed(uri);
         }
@@ -102,11 +104,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ── 7. Commands ─────────────────────────────────────────────────────
   context.subscriptions.push(
     vscode.commands.registerCommand('seenIt.markReviewed', (uri?: vscode.Uri) => {
-      if (uri) { tracker.markReviewed(uri); }
+      if (uri) {
+        const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+        tracker.markReviewed(uri, doc?.getText());
+      }
     }),
 
     vscode.commands.registerCommand('seenIt.markUnreviewed', (uri?: vscode.Uri) => {
-      if (uri) { tracker.markUnreviewed(uri); }
+      if (uri) {
+        tracker.markUnreviewed(uri);
+      }
     }),
 
     vscode.commands.registerCommand('seenIt.markAllReviewed', () => {
@@ -207,12 +214,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           break;
         }
       }
-      if (relativePath === null) { continue; }
+      if (relativePath === null) {
+        continue;
+      }
 
       const nowTrackable = isPathTrackable(relativePath, newRules);
       const wasTrackable = isPathTrackable(relativePath, prevRules);
       if (nowTrackable && !wasTrackable) {
-        tracker.markNeedsReview(vscode.Uri.file(fullPath), true);
+        tracker.addFile(vscode.Uri.file(fullPath));
         added++;
       }
     }

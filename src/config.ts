@@ -3,7 +3,6 @@ import builtinExcludes from './builtin-excludes.json';
 
 /**
  * Built-in patterns that are always excluded unless explicitly included.
- * These represent common non-source directories/files across ecosystems.
  */
 const BUILTIN_EXCLUDES: readonly string[] = builtinExcludes;
 

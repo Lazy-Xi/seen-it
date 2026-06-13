@@ -2,7 +2,7 @@
   "name": "seen-it",
   "displayName": "Seen It - File Review Tracker",
   "description": "Track file changes and require review before proceeding.",
-  "version": "0.2.1",
+  "version": "0.4.0",
   "publisher": "Lazy-Xi",
   "icon": "media/package-icon.png",
   "license": "MIT",
