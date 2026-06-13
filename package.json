@@ -1,8 +1,8 @@
 {
   "name": "seen-it",
-  "displayName": "Seen It — File Review Tracker",
+  "displayName": "Seen It - File Review Tracker",
   "description": "Track file changes and require review before proceeding.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "Lazy-Xi",
   "icon": "media/package-icon.png",
   "license": "MIT",
@@ -30,7 +30,7 @@
             "type": "string"
           },
           "default": [],
-          "description": "Additional glob patterns to exclude from review tracking (added to built-in defaults). User-level and project-level patterns are merged (union). Built-in defaults: .git, node_modules, .vscode, dist, build, .next, __pycache__, *.pyc."
+          "description": "Additional glob patterns to exclude from review tracking (added to built-in defaults). User-level and project-level patterns are merged (union). Built-in defaults cover ~170 patterns across 20+ ecosystems (see src/builtin-excludes.json)."
         },
         "seenIt.include": {
           "type": "array",

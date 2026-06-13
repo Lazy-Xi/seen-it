@@ -1,5 +1,9 @@
 # Seen It — File Review Tracker
 
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/Lazy-Xi.seen-it.png?style=flat-square&color=blue&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=Lazy-Xi.seen-it)
+[![Installs](https://vsmarketplacebadges.dev/installs-short/Lazy-Xi.seen-it.png?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=Lazy-Xi.seen-it)
+[![Rating](https://vsmarketplacebadges.dev/rating-short/Lazy-Xi.seen-it.png?style=flat-square&color=orange)](https://marketplace.visualstudio.com/items?itemName=Lazy-Xi.seen-it)
+
 > Track file changes and require review before proceeding.
 
 **Seen It** is a VS Code extension that helps developers track which files in their workspace have changed and whether those changes have been reviewed. It provides a built-in code review checklist in the VS Code sidebar, ensuring no modified file goes unexamined before committing, opening a PR, or handing off work.
@@ -12,7 +16,7 @@
 - **Dual sidebar tree views** — "To Review" and "Reviewed" lists with hierarchical directory structure and checkbox-based bulk operations.
 - **Status bar indicator** — Shows `Seen It: N to review` when there are pending files; click to open the output log.
 - **Bulk action commands** — Mark All as Reviewed, Approve All, and Approve Reviewed for quick workflow transitions.
-- **Configurable file filtering** — Glob-based `exclude`/`include` rules with built-in defaults (`.git`, `node_modules`, `dist`, etc.). Supports user-level and project-level settings.
+- **Configurable file filtering** — Glob-based `exclude`/`include` rules with ~170 built-in defaults covering 20+ ecosystems (see [`src/builtin-excludes.json`](src/builtin-excludes.json)). Supports user-level and project-level settings.
 - **Persistent state** — Review state survives VS Code restarts via `workspaceState`.
 - **Zero runtime dependencies** — Relies only on the VS Code API. The `.vsix` package stays lightweight.
 

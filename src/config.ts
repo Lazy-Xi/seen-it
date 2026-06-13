@@ -1,19 +1,11 @@
 import * as vscode from 'vscode';
+import builtinExcludes from './builtin-excludes.json';
 
 /**
  * Built-in patterns that are always excluded unless explicitly included.
  * These represent common non-source directories/files across ecosystems.
  */
-const BUILTIN_EXCLUDES: readonly string[] = [
-  '.git',
-  'node_modules',
-  '.vscode',
-  'dist',
-  'build',
-  '.next',
-  '__pycache__',
-  '*.pyc',
-];
+const BUILTIN_EXCLUDES: readonly string[] = builtinExcludes;
 
 /**
  * Merged filter rules, resolved from built-in defaults + user config + project config.
@@ -43,9 +35,7 @@ export function getFilterRules(): FilterRules {
 
   // ── include: project-level overrides user-level ──
   const includeInspection = config.inspect<string[]>('include');
-  const include = includeInspection?.workspaceValue
-    ?? includeInspection?.globalValue
-    ?? [];
+  const include = includeInspection?.workspaceValue ?? includeInspection?.globalValue ?? [];
 
   return { exclude, include };
 }
@@ -94,16 +84,18 @@ export function matchesPattern(relativePath: string, pattern: string): boolean {
   }
 
   // Convert glob to regex
-  const regexStr = '^' + pat
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex specials (* ? excluded)
-    .replace(/\*\*\//g, '(%PARENT%|%EMPTY%)') // placeholder for **/
-    .replace(/\*\*/g, '%GLOBSTAR%')           // placeholder for ** (non-trailing-slash)
-    .replace(/\*/g, '[^/]*')                  // * → match within segment
-    .replace(/\?/g, '[^/]')                   // ? → single char
-    .replace(/%PARENT%/g, '(.+/)?')           // **/ → optional leading path
-    .replace(/%EMPTY%/g, '')                  // handle leading **/
-    .replace(/%GLOBSTAR%/g, '.*')             // ** → anything
-    + '$';
+  const regexStr =
+    '^' +
+    pat
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex specials (* ? excluded)
+      .replace(/\*\*\//g, '(%PARENT%|%EMPTY%)') // placeholder for **/
+      .replace(/\*\*/g, '%GLOBSTAR%') // placeholder for ** (non-trailing-slash)
+      .replace(/\*/g, '[^/]*') // * → match within segment
+      .replace(/\?/g, '[^/]') // ? → single char
+      .replace(/%PARENT%/g, '(.+/)?') // **/ → optional leading path
+      .replace(/%EMPTY%/g, '') // handle leading **/
+      .replace(/%GLOBSTAR%/g, '.*') + // ** → anything
+    '$';
 
   return new RegExp(regexStr).test(path);
 }
