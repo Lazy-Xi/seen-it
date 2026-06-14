@@ -1,6 +1,12 @@
 import * as vscode from 'vscode';
 import type { TreeNode } from './types';
 
+// Shared logger for diagnostic output
+let _outputChannel: vscode.OutputChannel;
+export function log(msg: string): void {
+  _outputChannel?.appendLine(`[${new Date().toLocaleTimeString()}] ${msg}`);
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // ── 1. Status bar ───────────────────────────────────────────────────
   const config = vscode.workspace.getConfiguration('seenIt');
@@ -16,12 +22,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
   context.subscriptions.push(statusBarItem);
 
-  const outputChannel = vscode.window.createOutputChannel('Seen It');
-  context.subscriptions.push(outputChannel);
+  _outputChannel = vscode.window.createOutputChannel('Seen It');
+  context.subscriptions.push(_outputChannel);
 
-  const log = (msg: string) => {
-    outputChannel.appendLine(`[${new Date().toLocaleTimeString()}] ${msg}`);
-  };
+  log('Extension activating...');
 
   // ── 2. Core state manager ───────────────────────────────────────────
   const { ReviewTracker } = await import('./reviewTracker');
@@ -145,7 +149,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand('seenIt.showOutput', () => {
-      outputChannel.show();
+      _outputChannel.show();
     }),
 
     vscode.commands.registerCommand('seenIt.diagnostic', () => {
@@ -158,7 +162,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       log(`Workspace folders: ${(vscode.workspace.workspaceFolders ?? []).length}`);
       log(`─────────────────`);
-      outputChannel.show();
+      _outputChannel.show();
     })
   );
 

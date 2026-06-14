@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { FileReviewState } from './types';
+import { log } from './extension';
 
 const STORAGE_KEY = 'seenIt.fileReviews';
 
@@ -50,22 +51,37 @@ export class ReviewTracker {
   updateReviewState(uri: vscode.Uri, documentContent?: string, allowNew = false): void {
     const key = normalizeKey(uri);
     const existing = this._files.get(key);
+    const contentLength = documentContent?.length ?? 0;
+
+    log(`[ReviewTracker] updateReviewState: ${key}`);
+    log(`  - allowNew=${allowNew} | existing=${!!existing} | contentLength=${contentLength}`);
 
     if (existing) {
       const currentHash = documentContent !== undefined ? hashContent(documentContent) : readContentHash(key);
+      log(`  - currentHash=${currentHash} | reviewedContentHash=${existing.reviewedContentHash} | originalContentHash=${existing.originalContentHash}`);
+      log(`  - state: reviewed=${existing.reviewed} | approved=${existing.approved} | hasBeenReviewed=${existing.hasBeenReviewed}`);
+
       if (this._transition(key, existing, currentHash, !allowNew)) {
+        log(`  - State CHANGED → persisting and firing event`);
         this._persist();
         this._onDidChangeReviewState.fire();
+      } else {
+        log(`  - State UNCHANGED`);
       }
     } else if (allowNew) {
       const diskHash = readContentHash(key);
       if (diskHash === undefined) {
+        log(`  - Disk read failed, skipping`);
         return;
       }
       const contentHash = documentContent !== undefined ? hashContent(documentContent) : diskHash;
+      log(`  - New file: diskHash=${diskHash} | contentHash=${contentHash}`);
+
       if (contentHash === diskHash) {
+        log(`  - Content matches disk, not tracking`);
         return;
       }
+      log(`  - Adding to tracking as toReview`);
       this._files.set(key, {
         uri: key,
         reviewed: false,
@@ -85,14 +101,17 @@ export class ReviewTracker {
   addFile(uri: vscode.Uri): void {
     const key = normalizeKey(uri);
     if (this._files.has(key)) {
+      log(`[ReviewTracker] addFile: ${key} | already tracked, skipping`);
       return;
     }
 
     const currentHash = readContentHash(key);
     if (currentHash === undefined) {
+      log(`[ReviewTracker] addFile: ${key} | disk read failed, skipping`);
       return;
     }
 
+    log(`[ReviewTracker] addFile: ${key} | hash=${currentHash} → adding as toReview`);
     this._files.set(key, {
       uri: key,
       reviewed: false,
@@ -114,6 +133,7 @@ export class ReviewTracker {
    */
   private _transition(key: string, entry: FileReviewState, currentHash: number | undefined, isSave: boolean): boolean {
     if (currentHash === undefined) {
+      log(`[ReviewTracker] _transition: ${key} | currentHash=undefined → false`);
       return false;
     }
 
@@ -122,11 +142,22 @@ export class ReviewTracker {
     const matchesReviewed = currentHash === entry.reviewedContentHash;
     const matchesOriginal = entry.originalContentHash !== undefined && currentHash === entry.originalContentHash;
 
+    log(`[ReviewTracker] _transition: ${key}`);
+    log(`  - isSave=${isSave} | isApproved=${isApproved} | isReviewed=${isReviewed}`);
+    log(`  - currentHash=${currentHash} | matchesReviewed=${matchesReviewed} | matchesOriginal=${matchesOriginal}`);
+
     // ── approved ──────────────────────────────────────────────────────
     if (isApproved) {
       if (matchesReviewed) {
+        log(`  - [approved] matchesReviewed → false (no change)`);
         return false;
       }
+      if (matchesOriginal) {
+        log(`  - [approved] matchesOriginal → update reviewedContentHash, stay approved`);
+        entry.reviewedContentHash = currentHash;
+        return true;
+      }
+      log(`  - [approved] !matches → toReview (approved=false, reviewed=false)`);
       entry.approved = false;
       entry.reviewed = false;
       entry.lastModified = Date.now();
@@ -137,8 +168,10 @@ export class ReviewTracker {
     // ── reviewed ──────────────────────────────────────────────────────
     if (isReviewed) {
       if (matchesReviewed) {
+        log(`  - [reviewed] matchesReviewed → false (no change)`);
         return false;
       }
+      log(`  - [reviewed] !matchesReviewed → toReview (reviewed=false)`);
       entry.reviewed = false;
       entry.lastModified = Date.now();
       entry.reviewedAt = undefined;
@@ -146,37 +179,42 @@ export class ReviewTracker {
     }
 
     // ── toReview ──────────────────────────────────────────────────────
+    log(`  - [toReview] Checking transitions...`);
 
-    if (matchesOriginal) {
-      if (entry.hasBeenReviewed) {
+    if (matchesReviewed) {
+      if (matchesOriginal && !entry.hasBeenReviewed) {
+        log(`  - [toReview] matchesReviewed + matchesOriginal + !hasBeenReviewed → untracked`);
+        this._files.delete(key);
+        return true;
+      }
+      if (!isSave) {
+        log(`  - [toReview] matchesReviewed + !isSave → reviewed`);
         entry.reviewed = true;
         entry.reviewedAt = Date.now();
         return true;
       }
+      log(`  - [toReview] matchesReviewed + isSave → stay in toReview`);
+      entry.lastModified = Date.now();
+      return true;
+    }
+
+    if (matchesOriginal) {
+      if (entry.hasBeenReviewed) {
+        log(`  - [toReview] matchesOriginal + hasBeenReviewed → no change`);
+        return false;
+      }
+      log(`  - [toReview] matchesOriginal + !hasBeenReviewed → untracked (delete)`);
       this._files.delete(key);
       return true;
     }
 
-    if (matchesReviewed) {
-      if (!isSave) {
-        entry.reviewed = true;
-        entry.reviewedAt = Date.now();
-        return true;
-      }
-      if (entry.hasBeenReviewed) {
-        entry.reviewed = true;
-        entry.reviewedAt = Date.now();
-      } else {
-        this._files.delete(key);
-      }
+    if (isSave) {
+      log(`  - [toReview] !matches + isSave → update lastModified`);
+      entry.lastModified = Date.now();
       return true;
     }
 
-    if (isSave) {
-      entry.lastModified = Date.now();
-      entry.reviewedContentHash = currentHash;
-      return true;
-    }
+    log(`  - [toReview] !matches + !isSave → update lastModified only (false)`);
     entry.lastModified = Date.now();
     return false;
   }
@@ -232,6 +270,7 @@ export class ReviewTracker {
     for (const entry of this._files.values()) {
       if (entry.reviewed && !entry.approved) {
         entry.approved = true;
+        entry.hasBeenReviewed = false;
       }
     }
     this._persist();
@@ -247,6 +286,8 @@ export class ReviewTracker {
   removeFile(uri: vscode.Uri): FileReviewState | undefined {
     const key = normalizeKey(uri);
     const entry = this._files.get(key);
+    log(`[ReviewTracker] removeFile: ${key} | wasTracked=${!!entry}`);
+
     if (entry && this._files.delete(key)) {
       this._persist();
       this._onDidChangeReviewState.fire();
@@ -255,12 +296,10 @@ export class ReviewTracker {
     return undefined;
   }
 
-  /**
-   * Restore a previously removed entry (e.g. after atomic save).
-   * Only restores if no entry already exists for this key.
-   */
   restoreFile(entry: FileReviewState): void {
     const key = entry.uri; // uri field stores the normalized key
+    log(`[ReviewTracker] restoreFile: ${key} | alreadyExists=${this._files.has(key)}`);
+
     if (this._files.has(key)) {
       return;
     }
@@ -306,9 +345,6 @@ export class ReviewTracker {
     const stored = this.context.workspaceState.get<Record<string, FileReviewState>>(STORAGE_KEY);
     if (stored) {
       for (const [key, value] of Object.entries(stored)) {
-        // Reset hasBeenReviewed on restore — cross-session "was reviewed" state
-        // causes incorrect behavior: undo-to-saved would restore to reviewed
-        // instead of removing from tracking.
         value.hasBeenReviewed = false;
         this._files.set(key, value);
       }
