@@ -2,7 +2,7 @@
   "name": "seen-it",
   "displayName": "Seen It - File Review Tracker",
   "description": "Track file changes and require review before proceeding.",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "publisher": "Lazy-Xi",
   "icon": "media/package-icon.png",
   "license": "MIT",
@@ -151,6 +151,7 @@
     "build": "node esbuild.config.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "lint": "tsc --noEmit",
+    "test": "vitest run",
     "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
@@ -158,7 +159,8 @@
     "@types/vscode": "^1.120.0",
     "@vscode/vsce": "^2.32.0",
     "esbuild": "^0.20.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
   },
   "packageManager": "pnpm@10.33.0"
 }

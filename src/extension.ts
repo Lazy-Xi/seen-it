@@ -33,8 +33,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── 3. FileSystemWatcher + FileIndex ─────────────────────────────────
   const { setupFileSystemWatcher, FileIndex } = await import('./fileWatcher');
-  setupFileSystemWatcher(tracker, context);
-
   const fileIndex = new FileIndex();
 
   // ── 4. TreeViews: Unreviewed + Reviewed ─────────────────────────────
@@ -59,6 +57,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       () => fileIndex.init(context)
     )
     .then(() => {
+      setupFileSystemWatcher(tracker, context);
       unreviewedProvider.refresh();
       reviewedProvider.refresh();
     });

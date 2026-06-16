@@ -2,9 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { getFilterRules, isPathTrackable } from './config';
+import { log } from './extension';
 import type { ReviewTracker } from './reviewTracker';
 import type { FileReviewState } from './types';
-import { log } from './extension';
 
 // ── File Index ──────────────────────────────────────────────────────
 
@@ -85,8 +85,14 @@ export class FileIndex {
 
     watcher.onDidCreate((uri) => {
       fs.promises.stat(uri.fsPath).then(
-        (stat) => { if (stat.isFile()) { this._files.add(uri.fsPath); } },
-        () => { /* deleted between event and stat */ }
+        (stat) => {
+          if (stat.isFile()) {
+            this._files.add(uri.fsPath);
+          }
+        },
+        () => {
+          /* deleted between event and stat */
+        }
       );
     });
 
@@ -98,8 +104,14 @@ export class FileIndex {
       for (const { oldUri, newUri } of e.files) {
         this._files.delete(oldUri.fsPath);
         fs.promises.stat(newUri.fsPath).then(
-          (stat) => { if (stat.isFile()) { this._files.add(newUri.fsPath); } },
-          () => { /* deleted between event and stat */ }
+          (stat) => {
+            if (stat.isFile()) {
+              this._files.add(newUri.fsPath);
+            }
+          },
+          () => {
+            /* deleted between event and stat */
+          }
         );
       }
     });
@@ -129,37 +141,42 @@ export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.E
   // Atomic save = delete + create in quick succession.
   const recentlyDeleted = new Map<string, { entry: FileReviewState; timer: ReturnType<typeof setTimeout> }>();
   context.subscriptions.push({
-    dispose() { for (const d of recentlyDeleted.values()) { clearTimeout(d.timer); } recentlyDeleted.clear(); },
+    dispose() {
+      for (const d of recentlyDeleted.values()) {
+        clearTimeout(d.timer);
+      }
+      recentlyDeleted.clear();
+    },
   });
 
   // ── FileSystemWatcher: handles saves, external changes, AI agent edits ──
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 
   watcher.onDidChange((uri) => {
-    if (!isTrackableFile(uri)) { return; }
+    if (!isTrackableFile(uri)) {
+      return;
+    }
     const state = tracker.getFileState(uri);
-    log(`[FileWatcher] onDidChange: ${uri.fsPath} | tracked=${!!state}`);
-
     if (state) {
       tracker.updateReviewState(uri);
+    } else {
+      tracker.addFile(uri);
     }
-    // Don't add untracked files here — they're added via onDidChangeTextDocument (dirty)
-    // or onDidCreate (file creation). This prevents re-tracking files that were just untracked.
   });
 
   watcher.onDidCreate((uri) => {
-    if (!isTrackableFile(uri)) { return; }
+    if (!isTrackableFile(uri)) {
+      return;
+    }
     const key = path.normalize(uri.fsPath);
     const deleted = recentlyDeleted.get(key);
-    log(`[FileWatcher] onDidCreate: ${uri.fsPath} | atomicRestore=${!!deleted}`);
 
     if (deleted) {
       clearTimeout(deleted.timer);
       recentlyDeleted.delete(key);
-      log(`[FileWatcher] → restoreFile (atomic save detected)`);
+      log(`[FileWatcher] Atomic save restored: ${uri.fsPath}`);
       tracker.restoreFile(deleted.entry);
     } else {
-      log(`[FileWatcher] → addFile`);
       tracker.addFile(uri);
     }
   });
@@ -167,13 +184,11 @@ export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.E
   watcher.onDidDelete((uri) => {
     const entry = tracker.removeFile(uri);
     const key = path.normalize(uri.fsPath);
-    log(`[FileWatcher] onDidDelete: ${uri.fsPath} | wasTracked=${!!entry}`);
 
     if (entry) {
       const timer = setTimeout(() => {
         recentlyDeleted.delete(key);
-        log(`[FileWatcher] Atomic save window expired for: ${key}`);
-      }, 500);
+      }, 2000);
       recentlyDeleted.set(key, { entry, timer });
     }
   });
@@ -181,8 +196,18 @@ export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.E
   // ── VS Code file operation events ──────────────────────────────────
   const createListener = vscode.workspace.onDidCreateFiles((e) => {
     for (const uri of e.files) {
-      if (isTrackableFile(uri)) {
-        log(`[FileWatcher] onDidCreateFiles: ${uri.fsPath}`);
+      if (!isTrackableFile(uri)) {
+        continue;
+      }
+      const key = path.normalize(uri.fsPath);
+      const deleted = recentlyDeleted.get(key);
+
+      if (deleted) {
+        clearTimeout(deleted.timer);
+        recentlyDeleted.delete(key);
+        log(`[FileWatcher] Atomic save restored (bulk): ${uri.fsPath}`);
+        tracker.restoreFile(deleted.entry);
+      } else {
         tracker.addFile(uri);
       }
     }
@@ -190,8 +215,18 @@ export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.E
 
   const deleteListener = vscode.workspace.onDidDeleteFiles((e) => {
     for (const uri of e.files) {
-      log(`[FileWatcher] onDidDeleteFiles: ${uri.fsPath}`);
-      tracker.removeFile(uri);
+      if (!isTrackableFile(uri)) {
+        continue;
+      }
+      const entry = tracker.removeFile(uri);
+      const key = path.normalize(uri.fsPath);
+
+      if (entry) {
+        const timer = setTimeout(() => {
+          recentlyDeleted.delete(key);
+        }, 2000);
+        recentlyDeleted.set(key, { entry, timer });
+      }
     }
   });
 
@@ -199,15 +234,15 @@ export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.E
     for (const { oldUri, newUri } of e.files) {
       log(`[FileWatcher] onDidRenameFiles: ${oldUri.fsPath} → ${newUri.fsPath}`);
       tracker.removeFile(oldUri);
-      if (isTrackableFile(newUri)) { tracker.addFile(newUri); }
+      if (isTrackableFile(newUri)) {
+        tracker.addFile(newUri);
+      }
     }
   });
 
   // ── Strategy 4: In-memory text changes (before save) ───────────────
   const changeListener = vscode.workspace.onDidChangeTextDocument((e) => {
     if (isTrackableFile(e.document.uri)) {
-      const state = tracker.getFileState(e.document.uri);
-      log(`[FileWatcher] onDidChangeTextDocument: ${e.document.uri.fsPath} | tracked=${!!state} | contentLength=${e.document.getText().length}`);
       tracker.updateReviewState(e.document.uri, e.document.getText(), true);
     }
   });
