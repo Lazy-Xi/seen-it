@@ -103,6 +103,23 @@ describe('State machine transitions', () => {
     expect(tracker.getFileState(uri('f.txt'))).toBeUndefined();
   });
 
+  it('undo + file watcher addFile -> stays untracked (recently untracked)', () => {
+    writeFile('f.txt', 'v1');
+    const tracker = createTracker();
+
+    // Dirty handler adds file (untracked -> toReview)
+    tracker.updateReviewState(uri('f.txt'), 'v2', true);
+    expect(tracker.getFileState(uri('f.txt'))).toBeDefined();
+
+    // Dirty handler fires with reverted content (undo) — unsets file
+    tracker.updateReviewState(uri('f.txt'), 'v1', true);
+    expect(tracker.getFileState(uri('f.txt'))).toBeUndefined();
+
+    // File watcher's onDidChange fires with stale state — should NOT re-track
+    tracker.addFile(uri('f.txt'));
+    expect(tracker.getFileState(uri('f.txt'))).toBeUndefined();
+  });
+
   // ── Auto-reviewed on revert (previously reviewed files) ───────────
 
   it('reviewed -> edit -> undo -> back to reviewed', () => {
@@ -194,5 +211,95 @@ describe('State machine transitions', () => {
     writeFile('f.txt', 'v1');
     tracker.updateReviewState(uri('f.txt'));
     expect(tracker.getFileState(uri('f.txt'))).toBeUndefined();
+  });
+
+  // ── Approve workflow ─────────────────────────────────────────────
+
+  it('approve -> edit -> toReview (content differs from both baselines)', () => {
+    writeFile('f.txt', 'v1');
+    const tracker = createTracker();
+    tracker.addFile(uri('f.txt'));
+    tracker.markReviewed(uri('f.txt'), 'v1');
+    tracker.approveReviewed();
+    expect(tracker.getFileState(uri('f.txt'))!.approved).toBe(true);
+
+    // Edit: approved -> toReview
+    tracker.updateReviewState(uri('f.txt'), 'v2', false);
+    const s = tracker.getFileState(uri('f.txt'))!;
+    expect(s.approved).toBe(false);
+    expect(s.reviewed).toBe(false);
+  });
+
+  it('approved + content matches original -> auto-restore reviewed', () => {
+    writeFile('f.txt', 'v1');
+    const tracker = createTracker();
+    tracker.addFile(uri('f.txt'));
+    tracker.markReviewed(uri('f.txt'), 'v1');
+    tracker.approveReviewed();
+
+    // Content matches original baseline -> auto-restore reviewed
+    tracker.updateReviewState(uri('f.txt'), 'v1', false);
+    const s = tracker.getFileState(uri('f.txt'))!;
+    expect(s.reviewed).toBe(true);
+    expect(s.approved).toBe(false);
+  });
+
+  it('approved + content matches reviewed -> auto-restore reviewed', () => {
+    writeFile('f.txt', 'v1');
+    const tracker = createTracker();
+    tracker.addFile(uri('f.txt'));
+    tracker.markReviewed(uri('f.txt'), 'v1');
+    tracker.approveReviewed();
+
+    // Content matches reviewed baseline -> auto-restore reviewed
+    tracker.updateReviewState(uri('f.txt'), 'v1', false);
+    const s = tracker.getFileState(uri('f.txt'))!;
+    expect(s.reviewed).toBe(true);
+    expect(s.approved).toBe(false);
+  });
+
+  it('reviewed + content matches original -> no change (two baselines same)', () => {
+    writeFile('f.txt', 'v1');
+    const tracker = createTracker();
+    tracker.addFile(uri('f.txt'));
+    tracker.markReviewed(uri('f.txt'), 'v1');
+    // originalContentHash == reviewedContentHash (both "v1")
+    // Content stays "v1" -> no state change
+    tracker.updateReviewState(uri('f.txt'), 'v1', false);
+    const s = tracker.getFileState(uri('f.txt'))!;
+    expect(s.reviewed).toBe(true);
+  });
+
+  it('auto-restore reviewed from toReview (matchesReviewed + hasBeenReviewed)', () => {
+    writeFile('f.txt', 'v1');
+    const tracker = createTracker();
+    tracker.addFile(uri('f.txt'));
+    tracker.markReviewed(uri('f.txt'), 'v1');
+
+    // Edit: reviewed -> toReview
+    tracker.updateReviewState(uri('f.txt'), 'v2', true);
+    expect(tracker.getFileState(uri('f.txt'))!.reviewed).toBe(false);
+
+    // Revert to reviewed content -> auto-restore
+    tracker.updateReviewState(uri('f.txt'), 'v1', true);
+    expect(tracker.getFileState(uri('f.txt'))!.reviewed).toBe(true);
+  });
+
+  it('auto-restore reviewed from approved (matchesReviewed + hasBeenReviewed)', () => {
+    writeFile('f.txt', 'v1');
+    const tracker = createTracker();
+    tracker.addFile(uri('f.txt'));
+    tracker.markReviewed(uri('f.txt'), 'v1');
+    tracker.approveReviewed();
+
+    // Edit: approved -> toReview
+    tracker.updateReviewState(uri('f.txt'), 'v2', false);
+    expect(tracker.getFileState(uri('f.txt'))!.approved).toBe(false);
+
+    // Revert to reviewed content -> auto-restore reviewed (not approved)
+    tracker.updateReviewState(uri('f.txt'), 'v1', false);
+    const s = tracker.getFileState(uri('f.txt'))!;
+    expect(s.reviewed).toBe(true);
+    expect(s.approved).toBe(false);
   });
 });

@@ -105,7 +105,7 @@ export class ReviewTracker {
    */
   addFile(uri: vscode.Uri, baselineHash?: number): void {
     const key = normalizeKey(uri);
-    if (this._files.has(key)) {
+    if (this._files.has(key) || this._recentlyUntracked.has(key)) {
       return;
     }
 
@@ -140,40 +140,11 @@ export class ReviewTracker {
       return false;
     }
 
-    const isApproved = entry.approved === true;
-    const isReviewed = entry.reviewed === true && !isApproved;
-    const matchesReviewed = currentHash === entry.reviewedContentHash;
     const matchesOriginal = entry.originalContentHash !== undefined && currentHash === entry.originalContentHash;
+    const matchesReviewed = currentHash === entry.reviewedContentHash;
 
-    // ── approved ──────────────────────────────────────────────────────
-    if (isApproved) {
-      if (matchesReviewed) {
-        return false;
-      }
-      if (matchesOriginal) {
-        entry.reviewedContentHash = currentHash;
-        return true;
-      }
-      entry.approved = false;
-      entry.reviewed = false;
-      entry.lastModified = Date.now();
-      entry.reviewedAt = undefined;
-      return true;
-    }
-
-    // ── reviewed ──────────────────────────────────────────────────────
-    if (isReviewed) {
-      if (matchesReviewed) {
-        return false;
-      }
-      entry.reviewed = false;
-      entry.lastModified = Date.now();
-      entry.reviewedAt = undefined;
-      return true;
-    }
-
-    // ── toReview ──────────────────────────────────────────────────────
-    if (matchesOriginal && !entry.hasBeenReviewed) {
+    // ── 优先级1: 完全回退到原始（从未审查且未批准的文件） ─────────────
+    if (matchesOriginal && !entry.hasBeenReviewed && !entry.approved) {
       log(`[ReviewTracker] Reverted to original, untracking: ${key}`);
       this._files.delete(key);
       const existing = this._recentlyUntracked.get(key);
@@ -187,9 +158,38 @@ export class ReviewTracker {
       return true;
     }
 
+    // ── 优先级2: 回退到审查状态（曾审查过且非手动取消） ───────────────
     if (matchesReviewed && entry.hasBeenReviewed && !entry.explicitlyUnmarked) {
-      entry.reviewed = true;
-      entry.reviewedAt = Date.now();
+      if (!entry.reviewed || entry.approved) {
+        entry.reviewed = true;
+        entry.approved = false;
+        entry.reviewedAt = Date.now();
+        entry.lastModified = Date.now();
+        return true;
+      }
+      return false;
+    }
+
+    // ── 优先级3: approved 但内容变了 ──────────────────────────────────
+    if (entry.approved) {
+      if (matchesReviewed || matchesOriginal) {
+        return false;
+      }
+      entry.approved = false;
+      entry.reviewed = false;
+      entry.lastModified = Date.now();
+      entry.reviewedAt = undefined;
+      return true;
+    }
+
+    // ── 优先级4: reviewed 但内容变了 ──────────────────────────────────
+    if (entry.reviewed) {
+      if (matchesReviewed) {
+        return false;
+      }
+      entry.reviewed = false;
+      entry.lastModified = Date.now();
+      entry.reviewedAt = undefined;
       return true;
     }
 
@@ -249,7 +249,6 @@ export class ReviewTracker {
     for (const entry of this._files.values()) {
       if (entry.reviewed && !entry.approved) {
         entry.approved = true;
-        entry.hasBeenReviewed = false;
       }
     }
     this._persist();
