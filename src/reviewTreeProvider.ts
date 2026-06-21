@@ -1,8 +1,8 @@
-import * as vscode from 'vscode';
 import * as path from 'path';
-import { ReviewTracker } from './reviewTracker';
+import * as vscode from 'vscode';
 import { getFilterRules, isPathTrackable } from './config';
-import { FileReviewState, TreeNode, DirectoryNode, FileNode } from './types';
+import { ReviewTracker } from './reviewTracker';
+import { DirectoryNode, FileNode, FileReviewState, TreeNode } from './types';
 
 export type ReviewFilter = 'unreviewed' | 'reviewed';
 
@@ -58,17 +58,21 @@ export class ReviewTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     const allFiles = this.tracker.getAllFiles();
     const rules = getFilterRules();
     const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-    const filtered = allFiles.filter(f => {
+    const filtered = allFiles.filter((f) => {
       // Hide approved files from both views
-      if (f.approved) { return false; }
+      if (f.approved) {
+        return false;
+      }
       // Filter by review state
       if (this.filter === 'unreviewed' ? f.reviewed : !f.reviewed) {
         return false;
       }
       // Filter by current exclude/include rules
       const uri = vscode.Uri.file(f.uri);
-      const folder = workspaceFolders.find(ws => uri.fsPath.startsWith(ws.uri.fsPath));
-      if (!folder) { return false; }
+      const folder = workspaceFolders.find((ws) => uri.fsPath.startsWith(ws.uri.fsPath));
+      if (!folder) {
+        return false;
+      }
       const relativePath = path.relative(folder.uri.fsPath, uri.fsPath).replace(/\\/g, '/');
       return isPathTrackable(relativePath, rules);
     });
@@ -84,12 +88,10 @@ export class ReviewTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
     for (const fileState of files) {
       const uri = vscode.Uri.file(fileState.uri);
-      const folder = workspaceFolders.find(f => uri.fsPath.startsWith(f.uri.fsPath));
+      const folder = workspaceFolders.find((f) => uri.fsPath.startsWith(f.uri.fsPath));
       const folderPath = folder?.uri.fsPath ?? '';
       // Normalize separators to platform-native
-      const relativePath = path.normalize(
-        folder ? path.relative(folderPath, uri.fsPath) : uri.fsPath
-      );
+      const relativePath = path.normalize(folder ? path.relative(folderPath, uri.fsPath) : uri.fsPath);
       const folderLabel = folder?.name ?? 'Unknown';
 
       let wsGroup = topGroups.get(folderLabel);
@@ -104,7 +106,7 @@ export class ReviewTreeProvider implements vscode.TreeDataProvider<TreeNode> {
         topGroups.set(folderLabel, wsGroup);
       }
 
-      const segments = relativePath.split(path.sep).filter(s => s.length > 0);
+      const segments = relativePath.split(path.sep).filter((s) => s.length > 0);
       this._insertIntoTree(wsGroup, segments, uri, fileState);
     }
 
@@ -114,12 +116,7 @@ export class ReviewTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     return Array.from(topGroups.values());
   }
 
-  private _insertIntoTree(
-    parent: DirectoryNode,
-    segments: string[],
-    uri: vscode.Uri,
-    state: FileReviewState
-  ): void {
+  private _insertIntoTree(parent: DirectoryNode, segments: string[], uri: vscode.Uri, state: FileReviewState): void {
     if (segments.length === 0) {
       return;
     }
@@ -136,9 +133,9 @@ export class ReviewTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     const dirName = segments[0];
-    let childDir = parent.children.find(
-      n => n.kind === 'directory' && n.label === dirName
-    ) as DirectoryNode | undefined;
+    let childDir = parent.children.find((n) => n.kind === 'directory' && n.label === dirName) as
+      | DirectoryNode
+      | undefined;
 
     if (!childDir) {
       childDir = {
@@ -158,9 +155,7 @@ export class ReviewTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     const dirs = nodes
       .filter((n): n is DirectoryNode => n.kind === 'directory')
       .sort((a, b) => a.label.localeCompare(b.label));
-    const files = nodes
-      .filter((n): n is FileNode => n.kind === 'file')
-      .sort((a, b) => a.label.localeCompare(b.label));
+    const files = nodes.filter((n): n is FileNode => n.kind === 'file').sort((a, b) => a.label.localeCompare(b.label));
 
     for (const dir of dirs) {
       dir.children = this._sortNodes(dir.children);
@@ -192,9 +187,7 @@ export class ReviewTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     const isReviewed = node.state.reviewed;
     const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
 
-    item.checkboxState = isReviewed
-      ? vscode.TreeItemCheckboxState.Checked
-      : vscode.TreeItemCheckboxState.Unchecked;
+    item.checkboxState = isReviewed ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
 
     item.resourceUri = node.uri;
     item.contextValue = isReviewed ? 'reviewedFile' : 'unreviewedFile';

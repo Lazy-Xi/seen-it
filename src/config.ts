@@ -89,11 +89,11 @@ export function matchesPattern(relativePath: string, pattern: string): boolean {
       .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex specials (* ? excluded)
       .replace(/\*\*\//g, '(%PARENT%|%EMPTY%)') // placeholder for **/
       .replace(/\*\*/g, '%GLOBSTAR%') // placeholder for ** (non-trailing-slash)
-      .replace(/\*/g, '[^/]*') // * → match within segment
-      .replace(/\?/g, '[^/]') // ? → single char
-      .replace(/%PARENT%/g, '(.+/)?') // **/ → optional leading path
+      .replace(/\*/g, '[^/]*') // * -> match within segment
+      .replace(/\?/g, '[^/]') // ? -> single char
+      .replace(/%PARENT%/g, '(.+/)?') // **/ -> optional leading path
       .replace(/%EMPTY%/g, '') // handle leading **/
-      .replace(/%GLOBSTAR%/g, '.*') + // ** → anything
+      .replace(/%GLOBSTAR%/g, '.*') + // ** -> anything
     '$';
 
   return new RegExp(regexStr).test(path);

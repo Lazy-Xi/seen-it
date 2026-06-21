@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createTracker, uri, writeFile } from './helpers';
 
-describe('Scenario 1: untracked file modified → should start tracking', () => {
-  it('addFile on untracked file → tracked', () => {
+describe('Scenario 1: untracked file modified -> should start tracking', () => {
+  it('addFile on untracked file -> tracked', () => {
     writeFile('new.txt', 'hello world');
     const tracker = createTracker();
 
@@ -15,7 +15,7 @@ describe('Scenario 1: untracked file modified → should start tracking', () => 
     expect(after!.approved).toBeFalsy();
   });
 
-  it('updateReviewState(allowNew=false) on untracked → NOT tracked', () => {
+  it('updateReviewState(allowNew=false) on untracked -> NOT tracked', () => {
     writeFile('new.txt', 'hello world');
     const tracker = createTracker();
 
@@ -24,7 +24,7 @@ describe('Scenario 1: untracked file modified → should start tracking', () => 
     expect(tracker.getFileState(uri('new.txt'))).toBeUndefined();
   });
 
-  it('updateReviewState(allowNew=true, dirty content) → tracked', () => {
+  it('updateReviewState(allowNew=true, dirty content) -> tracked', () => {
     writeFile('new.txt', 'hello world');
     const tracker = createTracker();
 

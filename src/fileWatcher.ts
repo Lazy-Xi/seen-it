@@ -134,12 +134,17 @@ export class FileIndex {
  * Set up comprehensive file system watching.
  * Uses multiple strategies to catch all file changes.
  */
-export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.ExtensionContext): void {
+export function setupFileSystemWatcher(
+  tracker: ReviewTracker,
+  context: vscode.ExtensionContext,
+  baselineHashes?: Map<string, number>
+): void {
   log('[FileWatcher] Setting up file system watchers...');
 
   // Track recently deleted files to distinguish atomic saves from genuine deletes.
   // Atomic save = delete + create in quick succession.
   const recentlyDeleted = new Map<string, { entry: FileReviewState; timer: ReturnType<typeof setTimeout> }>();
+
   context.subscriptions.push({
     dispose() {
       for (const d of recentlyDeleted.values()) {
@@ -153,19 +158,23 @@ export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.E
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 
   watcher.onDidChange((uri) => {
-    if (!isTrackableFile(uri)) {
+    if (!isTrackableFile(uri) || tracker.isRecentlyUntracked(uri)) {
       return;
     }
     const state = tracker.getFileState(uri);
     if (state) {
-      tracker.updateReviewState(uri);
+      const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+      const content = doc && doc.isDirty ? doc.getText() : undefined;
+      tracker.updateReviewState(uri, content);
     } else {
-      tracker.addFile(uri);
+      const key = path.normalize(uri.fsPath);
+      const baselineHash = baselineHashes?.get(key);
+      tracker.addFile(uri, baselineHash);
     }
   });
 
   watcher.onDidCreate((uri) => {
-    if (!isTrackableFile(uri)) {
+    if (!isTrackableFile(uri) || tracker.isRecentlyUntracked(uri)) {
       return;
     }
     const key = path.normalize(uri.fsPath);
@@ -196,7 +205,7 @@ export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.E
   // ── VS Code file operation events ──────────────────────────────────
   const createListener = vscode.workspace.onDidCreateFiles((e) => {
     for (const uri of e.files) {
-      if (!isTrackableFile(uri)) {
+      if (!isTrackableFile(uri) || tracker.isRecentlyUntracked(uri)) {
         continue;
       }
       const key = path.normalize(uri.fsPath);
@@ -232,7 +241,7 @@ export function setupFileSystemWatcher(tracker: ReviewTracker, context: vscode.E
 
   const renameListener = vscode.workspace.onDidRenameFiles((e) => {
     for (const { oldUri, newUri } of e.files) {
-      log(`[FileWatcher] onDidRenameFiles: ${oldUri.fsPath} → ${newUri.fsPath}`);
+      log(`[FileWatcher] onDidRenameFiles: ${oldUri.fsPath} -> ${newUri.fsPath}`);
       tracker.removeFile(oldUri);
       if (isTrackableFile(newUri)) {
         tracker.addFile(newUri);

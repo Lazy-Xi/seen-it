@@ -29,11 +29,30 @@ function readContentHash(filePath: string): number | undefined {
 
 export class ReviewTracker {
   private _files: Map<string, FileReviewState> = new Map();
+  private _recentlyUntracked = new Map<string, ReturnType<typeof setTimeout>>();
+  private _baselineHashes = new Map<string, number>();
   private _onDidChangeReviewState = new vscode.EventEmitter<void>();
   public readonly onDidChangeReviewState = this._onDidChangeReviewState.event;
 
   constructor(private context: vscode.ExtensionContext) {
     this._restore();
+  }
+
+  isRecentlyUntracked(uri: vscode.Uri): boolean {
+    return this._recentlyUntracked.has(normalizeKey(uri));
+  }
+
+  get baselineHashes(): Map<string, number> {
+    return this._baselineHashes;
+  }
+
+  preloadBaselineHashes(files: Iterable<string>): void {
+    for (const filePath of files) {
+      const hash = readContentHash(filePath);
+      if (hash !== undefined) {
+        this._baselineHashes.set(path.normalize(filePath), hash);
+      }
+    }
   }
 
   // ── State machine ───────────────────────────────────────────────────
@@ -54,7 +73,7 @@ export class ReviewTracker {
 
     if (existing) {
       const currentHash = documentContent !== undefined ? hashContent(documentContent) : readContentHash(key);
-      if (this._transition(key, existing, currentHash, !allowNew)) {
+      if (this._transition(key, existing, currentHash)) {
         this._persist();
         this._onDidChangeReviewState.fire();
       }
@@ -81,10 +100,10 @@ export class ReviewTracker {
   }
 
   /**
-   * Add a new file to tracking (untracked → toReview).
+   * Add a new file to tracking (untracked -> toReview).
    * Used by file creation events (onDidCreateFiles, rename).
    */
-  addFile(uri: vscode.Uri): void {
+  addFile(uri: vscode.Uri, baselineHash?: number): void {
     const key = normalizeKey(uri);
     if (this._files.has(key)) {
       return;
@@ -95,13 +114,15 @@ export class ReviewTracker {
       return;
     }
 
+    const originalHash = baselineHash ?? currentHash;
+
     log(`[ReviewTracker] Added: ${key}`);
     this._files.set(key, {
       uri: key,
       reviewed: false,
       lastModified: Date.now(),
       reviewedContentHash: currentHash,
-      originalContentHash: currentHash,
+      originalContentHash: originalHash,
     });
     this._persist();
     this._onDidChangeReviewState.fire();
@@ -113,9 +134,8 @@ export class ReviewTracker {
    * @param key Normalized file key
    * @param entry The file state entry (mutated in place)
    * @param currentHash Current content hash
-   * @param isSave true from save handler, false from dirty handler
    */
-  private _transition(key: string, entry: FileReviewState, currentHash: number | undefined, isSave: boolean): boolean {
+  private _transition(key: string, entry: FileReviewState, currentHash: number | undefined): boolean {
     if (currentHash === undefined) {
       return false;
     }
@@ -153,36 +173,26 @@ export class ReviewTracker {
     }
 
     // ── toReview ──────────────────────────────────────────────────────
-    if (matchesReviewed) {
-      if (matchesOriginal && !entry.hasBeenReviewed) {
-        log(`[ReviewTracker] Reverted to original, untracking: ${key}`);
-        this._files.delete(key);
-        return true;
-      }
-      if (!isSave) {
-        entry.reviewed = true;
-        entry.reviewedAt = Date.now();
-        return true;
-      }
-      entry.lastModified = Date.now();
-      return true;
-    }
-
-    if (matchesOriginal) {
-      if (entry.hasBeenReviewed) {
-        return false;
-      }
+    if (matchesOriginal && !entry.hasBeenReviewed) {
       log(`[ReviewTracker] Reverted to original, untracking: ${key}`);
       this._files.delete(key);
+      const existing = this._recentlyUntracked.get(key);
+      if (existing) {
+        clearTimeout(existing);
+      }
+      this._recentlyUntracked.set(
+        key,
+        setTimeout(() => this._recentlyUntracked.delete(key), 2000)
+      );
       return true;
     }
 
-    if (isSave) {
-      entry.lastModified = Date.now();
+    if (matchesReviewed && entry.hasBeenReviewed && !entry.explicitlyUnmarked) {
+      entry.reviewed = true;
+      entry.reviewedAt = Date.now();
       return true;
     }
 
-    entry.lastModified = Date.now();
     return false;
   }
 
@@ -196,6 +206,7 @@ export class ReviewTracker {
       entry.approved = false;
       entry.reviewedAt = Date.now();
       entry.hasBeenReviewed = true;
+      entry.explicitlyUnmarked = false;
       const contentHash = documentContent !== undefined ? hashContent(documentContent) : readContentHash(key);
       entry.reviewedContentHash = contentHash ?? entry.reviewedContentHash;
       this._persist();
@@ -210,6 +221,7 @@ export class ReviewTracker {
       entry.reviewed = false;
       entry.approved = false;
       entry.reviewedAt = undefined;
+      entry.explicitlyUnmarked = true;
       this._persist();
       this._onDidChangeReviewState.fire();
     }

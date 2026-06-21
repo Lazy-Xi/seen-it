@@ -6,13 +6,13 @@ import * as vscode from 'vscode';
  * Uses dual-baseline design for undo detection.
  *
  * State machine:
- *   untracked  →  toReview   (on save, content differs from baseline)
- *   toReview   →  reviewed   (user marks reviewed / content matches baseline)
- *   toReview   →  untracked  (content reverts to baseline, for files never reviewed)
- *   reviewed   →  toReview   (content changes from reviewed baseline)
- *   reviewed   →  approved   (user approves)
- *   approved   →  toReview   (content changes from approved baseline)
- *   approved   →  reviewed   (user marks reviewed)
+ *   untracked  ->  toReview   (on save, content differs from baseline)
+ *   toReview   ->  reviewed   (user explicitly marks reviewed)
+ *   toReview   ->  untracked  (content reverts to original, for files never reviewed)
+ *   reviewed   ->  toReview   (content changes from reviewed baseline)
+ *   reviewed   ->  approved   (user approves)
+ *   approved   ->  toReview   (content changes from approved baseline)
+ *   approved   ->  reviewed   (user marks reviewed)
  *
  * Encoded as:
  *   toReview  = { reviewed: false, approved: false }
@@ -32,6 +32,8 @@ export interface FileReviewState {
   approved?: boolean;
   /** Whether the file has ever been explicitly marked as reviewed by the user */
   hasBeenReviewed?: boolean;
+  /** Whether the user explicitly unmarked the file (prevents auto-restore on revert) */
+  explicitlyUnmarked?: boolean;
 }
 
 export type TreeNode = DirectoryNode | FileNode;

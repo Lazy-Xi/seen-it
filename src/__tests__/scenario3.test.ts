@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createTracker, storedState, uri, writeFile } from './helpers';
 
 describe('Scenario 3: hasBeenReviewed persisted across restarts', () => {
-  it('revert to original after review → stays tracked', () => {
+  it('revert to original after review -> stays tracked', () => {
     writeFile('revert.txt', 'original content');
     const tracker = createTracker();
 
@@ -15,7 +15,7 @@ describe('Scenario 3: hasBeenReviewed persisted across restarts', () => {
     expect(tracker.getFileState(uri('revert.txt'))).toBeDefined();
   });
 
-  it('restart preserves hasBeenReviewed → revert does not untrack', () => {
+  it('restart preserves hasBeenReviewed -> revert does not untrack', () => {
     writeFile('revert.txt', 'original content');
     const tracker1 = createTracker();
 

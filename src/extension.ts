@@ -57,7 +57,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       () => fileIndex.init(context)
     )
     .then(() => {
-      setupFileSystemWatcher(tracker, context);
+      tracker.preloadBaselineHashes(fileIndex.files);
+      setupFileSystemWatcher(tracker, context, tracker.baselineHashes);
       unreviewedProvider.refresh();
       reviewedProvider.refresh();
     });
@@ -165,7 +166,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
-  // ── 8. Config change → diff old/new rules, apply delta ─────────────────
+  // ── 8. Config change -> diff old/new rules, apply delta ─────────────────
   const nodePath = await import('path');
   const { getFilterRules, isPathTrackable } = await import('./config');
 
